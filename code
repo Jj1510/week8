@@ -1,0 +1,56 @@
+# Replace with your data storage details (Data Lake, Blob Storage, or Databricks)
+data_path = "path/to/your/nyc_taxi_data"
+
+# Load data as DataFrame
+df = spark.read.parquet(data_path)
+
+# Query 1: Add 'Revenue' column
+df = df.withColumn("Revenue", df["Fare_amount"] + df["Extra"] + df["MTA_tax"] + df["Improvement_surcharge"] + df["Tip_amount"] + df["Tolls_amount"] + df["Total_amount"])
+
+# Query 2: Total passenger count by area
+passenger_count_by_area = df.groupBy("passenger_count", "pickup_location").count()
+
+# Query 3: Real-time average fare/earning per vendor (replace with streaming logic for real-time)
+# This example calculates average for the entire dataset (assuming batch processing)
+avg_fare_per_vendor = df.groupBy("vendor_id").agg({"Fare_amount": "avg", "Total_amount": "avg"})
+
+# Query 4: Moving count of payments by payment type (window function)
+window_spec = Window.orderBy(col("payment_type")).rowsBetween(-Window.inf, 0)
+payment_count_windowed = df.withColumn("payment_count", F.count("payment_type").over(window_spec))
+
+# Query 5: Top gaining vendors on a specific date
+# Replace '2024-07-20' with your desired date
+specific_date = "2024-07-20"
+top_gaining_vendors = df.filter(col("dropoff_datetime").like(specific_date + "%")) \
+  .groupBy("vendor_id") \
+  .agg(F.sum("passenger_count").alias("total_passengers"), F.sum("trip_distance").alias("total_distance")) \
+  .orderBy(col("total_passengers").desc()) \
+  .limit(2)
+
+# Query 6: Most passengers between two locations
+# Replace 'location1' and 'location2' with your desired locations
+location1 = "location1"
+location2 = "location2"
+most_passengers_between_locations = df.filter(col("pickup_location") == location1) \
+  .filter(col("dropoff_location") == location2) \
+  .groupBy("pickup_location", "dropoff_location") \
+  .agg(F.count("passenger_count").alias("passenger_count")) \
+  .orderBy(col("passenger_count").desc()) \
+  .limit(1)
+
+# Query 7: Top pickup locations with most passengers in last 5/10 seconds (logic depends on timestamp format)
+# Assuming 'pickup_datetime' is a timestamp column, replace 10 with your desired window in seconds
+window_duration = 10
+top_pickup_locations = df.withColumn("pickup_datetime_window", F.window(col("pickup_datetime"), window_duration, "seconds")) \
+  .groupBy("pickup_location", "pickup_datetime_window") \
+  .agg(F.count("passenger_count").alias("passenger_count")) \
+  .orderBy(col("passenger_count").desc()) \
+  .limit(10)
+
+# Display results (optional)
+passenger_count_by_area.show()
+avg_fare_per_vendor.show()
+payment_count_windowed.show()
+top_gaining_vendors.show()
+most_passengers_between_locations.show()
+top_pickup_locations.show()
